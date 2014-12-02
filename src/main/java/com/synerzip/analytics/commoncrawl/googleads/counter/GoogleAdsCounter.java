@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.log4j.Logger;
 import org.apache.spark.Accumulator;
 import org.apache.spark.SparkConf;
@@ -41,6 +42,7 @@ import scala.Tuple2;
 
 import com.martinkl.warc.WARCWritable;
 import com.martinkl.warc.mapreduce.WARCInputFormat;
+import com.synerzip.analytics.commoncrawl.common.WarcFileFilter;
 import com.synerzip.analytics.commoncrawl.googleads.parser.DefaultParser;
 import com.synerzip.analytics.commoncrawl.googleads.parser.GoogleAdParser;
 
@@ -58,6 +60,8 @@ public class GoogleAdsCounter  implements Serializable {
 	private static final String ARGNAME_OUTPATH = "-out";
 	private static final String ARGNAME_MASTER = "-master";
 	private static final String ARGNAME_OVERWRITE = "-overwrite";
+	private static final String ARGNAME_MAXFILES = "-maxfiles";
+	private static final String FILEFILTER = ".warc.gz";
 	private static final String ARGNAME_S3ACCESSKEY = "-accesskey";
 	private static final String ARGNAME_S3SECRETKEY = "-secretkey";	
 	
@@ -78,15 +82,17 @@ public class GoogleAdsCounter  implements Serializable {
 					+ ARGNAME_S3SECRETKEY + " <secretkey> ]\n"
 					+ "                         [ "
 					+ ARGNAME_OVERWRITE
-					+ " ]");
+					+ " ]\n"						
+					+ "                         [ "
+					+ ARGNAME_MAXFILES + " <maxfiles> ]");
 		System.out.println("");		
 	}	
 	
 	
 	/**
 	 * @param args
-	 * @throws IOException 
-	 * @throws URISyntaxException 
+	 * @throws IOException
+	 * @throws Exception
 	 */
 	public static void main(String[] args) throws IOException, Exception {
 		
@@ -111,9 +117,11 @@ public class GoogleAdsCounter  implements Serializable {
 					s3AccessKey = args[++i];
 				} else if (args[i].equals(ARGNAME_S3SECRETKEY)) {
 					s3SecretKey = args[++i];
+				} else if (args[i].equals(ARGNAME_MAXFILES)) {
+					WarcFileFilter.setMax(Long.parseLong(args[++i]));
 				} else if (args[i].equals(ARGNAME_OVERWRITE)) {
 					 overwrite = true;
-				}else {
+				} else {
 					LOG.warn("Unsupported argument: " + args[i]);
 				}
 			} catch (ArrayIndexOutOfBoundsException e) {
@@ -150,7 +158,8 @@ public class GoogleAdsCounter  implements Serializable {
 		final Accumulator<Integer> totalResponsePagesAccumulator = sc.accumulator(0);
 		final Accumulator<Integer> totalGoogleAdPagesAccumulator = sc.accumulator(0);
 		
-		
+		WarcFileFilter.setFilter(FILEFILTER);
+		FileInputFormat.setInputPathFilter(job, WarcFileFilter.class);
 		
 		JavaPairRDD<LongWritable, WARCWritable> records = sc.newAPIHadoopFile(inputPath,
 				WARCInputFormat.class,LongWritable.class, WARCWritable.class,job.getConfiguration());     
